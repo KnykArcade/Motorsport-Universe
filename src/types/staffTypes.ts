@@ -1,0 +1,60 @@
+// Team staff (Phase D). Specialists you hire to improve off-track operations.
+// Costs are in $M (converted to dollars by the finance engine).
+
+export type StaffRole =
+  | 'Technical Director'
+  | 'Race Engineer'
+  | 'Pit Crew Chief'
+  | 'Strategist';
+
+export type StaffResponsibilityId =
+  | 'technical'
+  | 'race-engineering'
+  | 'pit-operations'
+  | 'race-strategy'
+  | 'staff-recruitment'
+  | 'staff-contracts'
+  | 'driver-development';
+
+export type StaffResponsibilityPolicy =
+  | 'player'
+  | 'staff_advisory'
+  | 'staff_prepare_player_approval'
+  | 'staff_execute_routine';
+
+export type StaffResponsibilityPolicies = Partial<Record<StaffResponsibilityId, StaffResponsibilityPolicy>>;
+
+export type StaffMember = {
+  id: string;
+  name: string;
+  role: StaffRole;
+  nationality: string;
+  rating: number; // legacy 1-10 or generated 0-100; normalized by staffEngine
+  salary: number; // $M / year
+  signingFee: number; // $M one-off
+  // Optional for save compatibility. Hired specialists receive a two-year
+  // deal; older saves are migrated to the same default.
+  contractYearsRemaining?: number;
+  bio: string;
+};
+
+export const STAFF_ROLES: StaffRole[] = [
+  'Technical Director',
+  'Race Engineer',
+  'Pit Crew Chief',
+  'Strategist',
+];
+
+export const ROLE_EFFECT: Record<StaffRole, string> = {
+  'Technical Director': 'Raises car development success rate.',
+  'Race Engineer': 'Improves practice setup confidence.',
+  'Pit Crew Chief': 'Sharpens pit-stop execution.',
+  Strategist: 'Better in-race strategy calls.',
+};
+
+export const ROLE_PRINCIPAL_POINT_ATTRIBUTE: Record<StaffRole, 'development' | 'strategy' | 'financialDiscipline'> = {
+  'Technical Director': 'development',
+  'Race Engineer': 'strategy',
+  'Pit Crew Chief': 'financialDiscipline',
+  Strategist: 'strategy',
+};

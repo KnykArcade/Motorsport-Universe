@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm run archive:data
+      - name: Upload master-data recovery files
+        uses: actions/upload-artifact@v4
+        with:
+          name: master-data-archive-${{ github.sha }}
+          path: |
+            artifacts/master-archive/current/
+            docs/master-data/Motorsport_Sim_Manager_FINAL_MASTER_ARCHIVE_1990_2026.xlsx
+          retention-days: 90
+      - run: npm run test:season-loop
+      - run: npm run build
+      - run: npm run check:bundle
+
+  tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1/4, 2/4, 3/4, 4/4]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test -- --shard=${{ matrix.shard }}

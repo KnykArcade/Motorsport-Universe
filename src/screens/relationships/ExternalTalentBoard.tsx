@@ -1,0 +1,97 @@
+import { Panel } from '../../components/Panel';
+import { relationshipStatusLabel } from './relationshipPriorityViewModel';
+import type { ExternalTalentContext } from './relationshipTalentViewModel';
+import { RelationshipRiskNote } from './RelationshipRiskNote';
+import { externalTalentRiskIfIgnored, relationshipRiskPriorityContext } from './relationshipRiskViewModel';
+import { externalTalentManagementMove } from './relationshipActionViewModel';
+import { RelationshipActionPreview } from './RelationshipActionPreview';
+
+const STATUS_STYLES: Record<ExternalTalentContext['status'], string> = {
+  MustActNow: 'border-red-500/45 bg-red-500/5 text-red-200',
+  WatchClosely: 'border-amber-500/40 bg-amber-500/5 text-amber-200',
+  Stable: 'border-emerald-500/30 bg-emerald-500/5 text-emerald-200',
+};
+
+type Props = {
+  context: ExternalTalentContext;
+  onReviewDrivers: () => void;
+  onReviewStaff?: () => void;
+};
+
+export function ExternalTalentBoard({ context, onReviewDrivers }: Props) {
+  const hasDriverContext = context.openRaceSeats > 0 || context.targets.some((target) => target.kind === 'Driver');
+  const move = externalTalentManagementMove(context);
+
+  return (
+    <Panel title="External Talent · Authority #8">
+      <p className="mb-3 text-xs text-neutral-400">
+        Other drivers stay low priority until you create a recruitment context. Only saved scouting and pending agreements appear here.
+      </p>
+      <div className={`rounded-lg border p-3 ${STATUS_STYLES[context.status]}`}>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-sm font-bold text-neutral-100">Recruitment relationship context</div>
+            <div className="mt-0.5 text-[10px] uppercase tracking-wide text-neutral-500">{context.authorityLabel}</div>
+          </div>
+          <span className="shrink-0 rounded border border-current/25 px-2 py-1 text-[10px] font-bold uppercase tracking-wide">
+            {relationshipStatusLabel(context.status)}
+          </span>
+        </div>
+
+        <div className="mt-3 grid grid-cols-2 gap-1.5">
+          <Metric label="Live targets" value={`${context.targets.length}`} />
+          <Metric label="Open seats" value={`${context.openRaceSeats}`} />
+        </div>
+
+        <ul className="mt-3 space-y-1 text-[11px] text-neutral-300">
+          {context.reasons.slice(0, 3).map((reason) => <li key={reason}>• {reason}</li>)}
+        </ul>
+
+        <RelationshipRiskNote priorityContext={relationshipRiskPriorityContext(context)}>{externalTalentRiskIfIgnored(context)}</RelationshipRiskNote>
+
+        <div className="mt-3 rounded border border-neutral-700/70 bg-neutral-950/45 p-2.5">
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-[9px] font-bold uppercase tracking-wide text-[var(--era-accent-strong)]">Management move</div>
+            <div className="flex shrink-0 flex-wrap justify-end gap-1">
+              <span className="rounded border border-[var(--era-accent)]/35 bg-[var(--era-accent-soft)] px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-[var(--era-accent-strong)]">{move.styleLabel}</span>
+              <span className="rounded border border-neutral-700/60 bg-neutral-950/35 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-neutral-500">{move.priorityLabel}</span>
+            </div>
+          </div>
+          <div className="mt-1 text-xs font-semibold text-neutral-100">{move.title}</div>
+          <p className="mt-1 text-[10px] leading-relaxed text-[var(--era-accent-strong)]">{move.styleDetail}</p>
+          <p className="mt-1 text-[11px] leading-relaxed text-neutral-400">{move.rationale}</p>
+          <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">{move.expectedEffect}</p>
+          <RelationshipActionPreview preview={move.preview} />
+        </div>
+
+        {context.targets.length > 0 && (
+          <div className="mt-3 grid gap-2 lg:grid-cols-2">
+            {context.targets.map((target) => (
+              <article key={`${target.kind}:${target.id}`} className="rounded border border-neutral-800 bg-neutral-950/35 p-2.5 text-neutral-300">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="truncate text-xs font-bold text-neutral-100">{target.name}</div>
+                  <span className="shrink-0 text-[9px] font-semibold uppercase tracking-wide text-[var(--era-accent-strong)]">{target.kind}</span>
+                </div>
+                <div className="mt-1 text-[10px] font-semibold text-neutral-300">{target.signal}</div>
+                <p className="mt-1 text-[10px] leading-relaxed text-neutral-500">{target.detail}</p>
+              </article>
+            ))}
+          </div>
+        )}
+
+        <div className="mt-3 flex flex-wrap gap-3">
+          {hasDriverContext && <button type="button" onClick={onReviewDrivers} className="text-[11px] font-semibold text-[var(--era-accent-strong)] hover:underline">Review driver market →</button>}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded bg-neutral-950/30 px-2 py-1.5 text-center">
+      <div className="text-xs font-bold tabular-nums text-neutral-200">{value}</div>
+      <div className="text-[8px] uppercase tracking-wide text-neutral-600">{label}</div>
+    </div>
+  );
+}

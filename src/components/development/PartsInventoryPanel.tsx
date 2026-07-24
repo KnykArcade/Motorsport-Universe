@@ -1,0 +1,275 @@
+import { useState } from 'react';
+import { Button } from '../Button';
+import { Panel } from '../Panel';
+import { TechnicalTable, TechnicalTableCell, TechnicalTableHead, TechnicalTableRow } from '../TechnicalTable';
+import { formatMoney } from '../ui';
+import { activeDriversForTeam, teamById } from '../../game/careerState';
+import { useGame } from '../../game/GameContext';
+import {
+  availableSpareParts,
+  createInitialTeamPartsState,
+  fittedPartsForDriver,
+  latestPartDesign,
+  manufacturingQuote,
+  partConditionLabel,
+  PART_SPECS,
+  repairQuote,
+  seriesPartLabel,
+} from '../../sim/partsEngine';
+import { createInitialTeamResearch } from '../../sim/rdEngine';
+import { researchStateForTeam } from '../../sim/technicalAdapters';
+import { PART_TYPES, type CarPart, type PartType, type PartsAutomationSettings } from '../../types/partsTypes';
+import { AUTO_REPAIR_CONDITION_THRESHOLD } from '../../sim/partsAutomationEngine';
+
+const CONDITION_TONES = {
+  Fresh: 'bg-emerald-500 text-emerald-300',
+  Good: 'bg-blue-500 text-blue-300',
+  Worn: 'bg-amber-500 text-amber-300',
+  Critical: 'bg-red-500 text-red-300',
+} as const;
+
+export function PartsInventoryPanel() {
+  const { state, dispatch } = useGame();
+  const [view, setView] = useState<'fitted' | 'manufacturing' | 'spares'>('fitted');
+  const [selectedDriverId, setSelectedDriverId] = useState<string>();
+  if (!state) return null;
+  const team = teamById(state, state.selectedTeamId);
+  if (!team) return null;
+  const drivers = activeDriversForTeam(state, team.id);
+  const parts = state.teamParts?.[team.id]
+    ?? createInitialTeamPartsState(team, state.drivers, state.seasonYear);
+  const research = researchStateForTeam(state, team.id)
+    ?? createInitialTeamResearch(team.id, state.seasonYear);
+  const currentRound = state.calendar[state.currentRaceIndex]?.round ?? state.currentRaceIndex + 1;
+  const automation: PartsAutomationSettings = state.partsAutomation ?? { autoRepair: false, autoRestock: false, autoFit: false };
+  const fittedCount = parts.inventory.filter((part) => part.status === 'fitted').length;
+  const spareCount = parts.inventory.filter((part) => part.status === 'spare').length;
+  const repairCount = parts.inventory.filter((part) => part.status === 'repairing').length;
+  const selectedDriver = drivers.find((driver) => driver.id === selectedDriverId) ?? drivers[0];
+  const spareAndRepairParts = parts.inventory
+    .filter((part) => part.status === 'spare' || part.status === 'repairing')
+    .sort((a, b) => PART_TYPES.indexOf(a.type) - PART_TYPES.indexOf(b.type) || b.condition - a.condition);
+
+  return (
+    <Panel title="Parts & Factory">
+      <div className="mb-3 flex flex-wrap gap-3 text-xs text-neutral-500">
+        <span>Garage {fittedCount}/{drivers.length * PART_TYPES.length}</span>
+        <span>Spares {spareCount}</span>
+        <span>Repair {repairCount}</span>
+        <span>Factory {parts.manufacturingQueue.length}/3</span>
+      </div>
+
+      <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/40 p-3 text-xs leading-5 text-neutral-400">
+        Components are fitted to each driver's car. Wear now affects pace and mechanical risk; demanding tracks,
+        crashes, and mechanical retirements accelerate damage. Completed R&D tiers define the specification of newly manufactured parts.
+      </div>
+
+      <div className="mt-4 rounded-lg border border-neutral-800 bg-neutral-950/60 p-3">
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-neutral-300">Factory auto-manage</div>
+            <div className="text-xs text-neutral-500">The factory acts after each race using the same costs and queue limits as the buttons below.</div>
+          </div>
+        </div>
+        <div className="flex flex-wrap gap-4">
+          {([
+            ['autoFit', 'Auto-fit', `Swap in the best spare when a slot is empty or a fitted part drops below ${AUTO_REPAIR_CONDITION_THRESHOLD}%`],
+            ['autoRepair', 'Auto-repair', `Send spares below ${AUTO_REPAIR_CONDITION_THRESHOLD}% condition for repair`],
+            ['autoRestock', 'Auto-restock', 'Order a replacement when a part type has no spares'],
+          ] as const).map(([key, label, hint]) => (
+            <label key={key} className="flex items-start gap-2 text-xs text-neutral-300" title={hint}>
+              <input
+                type="checkbox"
+                className="mt-0.5 accent-amber-500"
+                checked={automation[key]}
+                onChange={(event) => dispatch({ type: 'SET_PARTS_AUTOMATION', settings: { ...automation, [key]: event.target.checked } })}
+              />
+              <span>
+                <span className="font-semibold">{label}</span>
+                <span className="block text-neutral-500">{hint}</span>
+              </span>
+            </label>
+          ))}
+        </div>
+      </div>
+
+      <nav className="mt-4 grid grid-cols-3 gap-1 rounded-lg border border-neutral-800 bg-neutral-950/60 p-1" aria-label="Parts inventory sections">
+        {([
+          ['fitted', 'Garage'],
+          ['manufacturing', `Factory (${parts.manufacturingQueue.length})`],
+          ['spares', `Spares & Repairs (${spareAndRepairParts.length})`],
+        ] as const).map(([id, label]) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setView(id)}
+            aria-current={view === id ? 'page' : undefined}
+            className={`rounded px-3 py-2 text-xs font-semibold ${view === id ? 'bg-amber-600 text-black' : 'text-neutral-400 hover:bg-neutral-800'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </nav>
+
+      {view === 'fitted' && selectedDriver && (
+        <div className="mt-4">
+          <div className="mb-3 flex flex-wrap gap-2">
+            {drivers.map((driver) => (
+              <button
+                key={driver.id}
+                type="button"
+                onClick={() => setSelectedDriverId(driver.id)}
+                aria-current={selectedDriver.id === driver.id ? 'page' : undefined}
+                className={`rounded px-3 py-1.5 text-xs font-semibold ${selectedDriver.id === driver.id ? 'bg-blue-600 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700'}`}
+              >
+                {driver.name} · Car #{driver.number}
+              </button>
+            ))}
+          </div>
+          <div className="grid gap-4">
+            {[selectedDriver].map((driver) => (
+              <div key={driver.id} className="rounded-xl border border-neutral-800 bg-neutral-900/40 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-neutral-100">{driver.name}</div>
+                <div className="text-xs text-neutral-500">Car #{driver.number} fitted components</div>
+              </div>
+              <div className="text-xs text-neutral-500">
+                {fittedPartsForDriver(parts, driver.id).length}/{PART_TYPES.length} fitted
+              </div>
+            </div>
+            <div className="grid gap-2 md:grid-cols-2">
+              {PART_TYPES.map((type) => {
+                const fitted = fittedPartsForDriver(parts, driver.id).find((part) => part.type === type);
+                const bestSpare = availableSpareParts(parts, type)[0];
+                return (
+                  <FittedPartRow
+                    key={type}
+                    type={type}
+                    label={seriesPartLabel(type, state.series)}
+                    part={fitted}
+                    spare={bestSpare}
+                    onFit={() => bestSpare && dispatch({ type: 'FIT_PART', partId: bestSpare.id, driverId: driver.id })}
+                  />
+                );
+              })}
+            </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'manufacturing' && (
+        <div className="mt-5">
+          <div className="mb-3 text-sm font-semibold text-neutral-200">Factory Manufacturing</div>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+          {PART_TYPES.map((type) => {
+            const quote = manufacturingQuote(parts, type, 1, research, state.seasonYear, currentRound);
+            const design = latestPartDesign(type, research);
+            const disabled = parts.manufacturingQueue.length >= 3 || team.budget < quote.cost;
+            return (
+              <div key={type} className="rounded-lg border border-neutral-800 bg-neutral-900/40 p-3">
+                <div className="text-sm font-semibold text-neutral-100">{seriesPartLabel(type, state.series)}</div>
+                <div className="mt-1 text-xs text-neutral-500">
+                  {design.designGeneration > 0 ? `Generation ${design.designGeneration} specification` : 'Baseline specification'}
+                </div>
+                <div className="mt-3 space-y-1 text-xs text-neutral-400">
+                  <div className="flex justify-between"><span>Cost</span><span>{formatMoney(quote.cost)}</span></div>
+                  <div className="flex justify-between"><span>Build time</span><span>{quote.totalRounds} round{quote.totalRounds === 1 ? '' : 's'}</span></div>
+                </div>
+                <Button
+                  className="mt-3 w-full"
+                  disabled={disabled}
+                  onClick={() => dispatch({ type: 'START_PART_MANUFACTURING', partType: type })}
+                >
+                  Manufacture
+                </Button>
+              </div>
+            );
+          })}
+        </div>
+          </div>
+      )}
+
+      {view === 'manufacturing' && parts.manufacturingQueue.length > 0 && (
+        <div className="mt-5 rounded-lg border border-blue-900/70 bg-blue-950/20 p-3">
+          <div className="mb-2 text-sm font-semibold text-blue-200">Active Factory Orders</div>
+          <div className="space-y-2">
+            {parts.manufacturingQueue.map((order) => (
+              <div key={order.id} className="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-300">
+                <span>{order.quantity}x {seriesPartLabel(order.type, state.series)} · Generation {order.designGeneration}</span>
+                <span>{order.roundsRemaining}/{order.totalRounds} rounds remaining</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {view === 'spares' && (
+        <div className="mt-5">
+          <div className="mb-3 text-sm font-semibold text-neutral-200">Spares & Repairs</div>
+          {spareAndRepairParts.length === 0 ? (
+            <div className="rounded-lg border border-neutral-800 bg-neutral-900/30 p-4 text-sm text-neutral-500">
+              No spare or repairing components.
+            </div>
+          ) : (
+            <TechnicalTable>
+              <TechnicalTableHead><TechnicalTableRow><TechnicalTableCell header>Component</TechnicalTableCell><TechnicalTableCell header>Type / generation</TechnicalTableCell><TechnicalTableCell header>Usage / condition</TechnicalTableCell><TechnicalTableCell header>Status / action</TechnicalTableCell></TechnicalTableRow></TechnicalTableHead>
+              <tbody>{spareAndRepairParts.map((part) => {
+              const quote = repairQuote(part);
+              const canRepair = part.status === 'spare' && part.condition < part.maximumCondition - 1 && team.budget >= quote.cost;
+              return <TechnicalTableRow key={part.id}><TechnicalTableCell className="font-semibold text-neutral-100">{part.name}</TechnicalTableCell><TechnicalTableCell>{seriesPartLabel(part.type, state.series)}<div className="text-neutral-500">Generation {part.designGeneration}</div></TechnicalTableCell><TechnicalTableCell>{part.racesUsed} races<div className={part.condition < 30 ? 'text-red-300' : 'text-neutral-400'}>{Math.round(part.condition)}% condition</div></TechnicalTableCell><TechnicalTableCell>{part.status === 'repairing' ? <span className="text-amber-300">Repair: {part.repairRoundsRemaining} round{part.repairRoundsRemaining === 1 ? '' : 's'}</span> : <div className="flex gap-2"><Button className="px-2 py-1 text-xs" disabled={!canRepair} onClick={() => dispatch({ type: 'REPAIR_PART', partId: part.id })}>Repair {formatMoney(quote.cost)}</Button><Button className="px-2 py-1 text-xs" variant="danger" onClick={() => dispatch({ type: 'RETIRE_PART', partId: part.id })}>Retire</Button></div>}</TechnicalTableCell></TechnicalTableRow>;
+                })}</tbody>
+            </TechnicalTable>
+          )}
+        </div>
+      )}
+    </Panel>
+  );
+}
+
+function FittedPartRow({
+  type,
+  label,
+  part,
+  spare,
+  onFit,
+}: {
+  type: PartType;
+  label: string;
+  part?: CarPart;
+  spare?: CarPart;
+  onFit: () => void;
+}) {
+  if (!part) {
+    return (
+      <div className="flex items-center justify-between rounded-lg border border-red-900/60 bg-red-950/20 p-3">
+        <div><div className="text-sm text-red-200">{label}</div><div className="text-xs text-red-400">No component fitted</div></div>
+        <Button disabled={!spare} onClick={onFit}>Fit spare</Button>
+      </div>
+    );
+  }
+  const conditionLabel = partConditionLabel(part.condition);
+  const tone = CONDITION_TONES[conditionLabel];
+  const shouldReplace = part.condition < 60 && spare && spare.condition > part.condition + 5;
+  return (
+    <div className="rounded-lg border border-neutral-800 bg-neutral-950/50 p-3">
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm text-neutral-100">{label} · {part.name}</div>
+          <div className={`text-xs ${tone.split(' ')[1]}`}>{conditionLabel} · {Math.round(part.condition)}% · Generation {part.designGeneration}</div>
+        </div>
+        {spare && (
+          <Button className="shrink-0" variant={shouldReplace ? 'primary' : 'ghost'} onClick={onFit}>
+            Fit {Math.round(spare.condition)}% spare
+          </Button>
+        )}
+      </div>
+      <div className="mt-2 h-1.5 overflow-hidden rounded bg-neutral-800">
+        <div className={`h-full ${tone.split(' ')[0]}`} style={{ width: `${part.condition}%` }} />
+      </div>
+      <div className="mt-1 text-[11px] text-neutral-600">{PART_SPECS[type].label} · {part.racesUsed} races used</div>
+    </div>
+  );
+}

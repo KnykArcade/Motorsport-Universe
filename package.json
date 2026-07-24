@@ -1,0 +1,46 @@
+{
+  "name": "motorsport-sim-manager",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "check:bundle": "node scripts/checkBundleSize.mjs",
+    "lint": "eslint .",
+    "typecheck": "tsc -b --noEmit",
+    "preview": "vite preview",
+    "test": "node scripts/runTestShards.mjs",
+    "test:single": "vitest run --maxWorkers=2",
+    "test:season-loop": "vitest run src/game/seasonLoop.e2e.test.ts",
+    "golden:update": "UPDATE_GOLDEN=1 vitest run src/game/p4bGoldenBaseline.test.ts",
+    "archive:data": "vitest run scripts/masterArchive/exportMasterArchive.test.ts --reporter=dot --disable-console-intercept",
+    "archive:workbook": "powershell -ExecutionPolicy Bypass -File scripts/masterArchive/runWorkbookBuilder.ps1",
+    "calibrate:live": "node scripts/runLiveRaceCalibration.mjs",
+    "pit:convert": "node scripts/convertPitWorkbook.mjs"
+  },
+  "dependencies": {
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
+    "react-router-dom": "^7.18.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tailwindcss/postcss": "^4.3.1",
+    "@types/node": "^24.13.2",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^6.0.2",
+    "autoprefixer": "^10.5.2",
+    "eslint": "^10.5.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.3",
+    "globals": "^17.6.0",
+    "postcss": "^8.5.16",
+    "tailwindcss": "^4.3.1",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "^8.61.0",
+    "vite": "^8.1.0",
+    "vitest": "^4.1.9"
+  }
+}
